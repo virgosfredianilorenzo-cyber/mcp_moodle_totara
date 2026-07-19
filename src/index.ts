@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import dotenv from "dotenv";
 import winston from "winston";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { MoodleClient } from "./moodleClient.js";
 
 // Imports des outils
@@ -24,7 +25,7 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    new winston.transports.Console(),
+    // Pas de transport Console : le stdout est réservé au protocole JSON-RPC MCP.
     new winston.transports.File({ filename: "mcp-server.log" }),
   ],
 });
@@ -77,7 +78,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      inputSchema: tool.inputSchema,
+      inputSchema: zodToJsonSchema(tool.inputSchema),
     })),
   };
 });
