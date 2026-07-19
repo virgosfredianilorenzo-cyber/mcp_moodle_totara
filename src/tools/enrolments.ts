@@ -19,10 +19,10 @@ export const getEnrolledUsers = {
     ),
   }),
   handler: async (params: { courseid: number }, client: MoodleClient) => {
-    const response = await client.callFunction<{ users: any[] }>("core_enrol_get_enrolled_users", {
+    const response = await client.callFunction<any[]>("core_enrol_get_enrolled_users", {
       courseid: params.courseid,
     });
-    const users = response.users.map((user: any) => ({
+    const users = response.map((user: any) => ({
       id: user.id,
       username: user.username,
       firstname: user.firstname,

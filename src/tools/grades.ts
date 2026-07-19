@@ -26,10 +26,10 @@ export const getGradeItems = {
       userid: params.userid,
     });
 
-    const courseInfo = await client.callFunction<{ courses: any[] }>("core_course_get_courses", {
+    const courseInfo = await client.callFunction<any[]>("core_course_get_courses", {
       options: { ids: [params.courseid] },
     });
-    const courseName = courseInfo.courses[0]?.fullname || "Cours inconnu";
+    const courseName = courseInfo[0]?.fullname || "Cours inconnu";
 
     const userInfo = await client.callFunction<{ users: any[] }>("core_user_get_users", {
       criteria: [{ key: "id", value: params.userid }],

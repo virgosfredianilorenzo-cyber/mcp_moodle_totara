@@ -26,23 +26,23 @@ export const getCompletionReport = {
   }),
   handler: async (params: { courseid: number }, client: MoodleClient) => {
     // Récupérer les activités du cours
-    const courseContents = await client.callFunction<{ contents: any[] }>("core_course_get_contents", {
+    const courseContents = await client.callFunction<any[]>("core_course_get_contents", {
       courseid: params.courseid,
     });
 
     // Récupérer les utilisateurs inscrits
-    const enrolledUsers = await client.callFunction<{ users: any[] }>("core_enrol_get_enrolled_users", {
+    const enrolledUsers = await client.callFunction<any[]>("core_enrol_get_enrolled_users", {
       courseid: params.courseid,
     });
 
     // Récupérer le nom du cours
-    const courseInfo = await client.callFunction<{ courses: any[] }>("core_course_get_courses", {
+    const courseInfo = await client.callFunction<any[]>("core_course_get_courses", {
       options: { ids: [params.courseid] },
     });
-    const coursename = courseInfo.courses[0]?.fullname || "Cours inconnu";
+    const coursename = courseInfo[0]?.fullname || "Cours inconnu";
 
     // Compter le nombre total d'activités (modules)
-    const activities = courseContents.contents.flatMap((section: any) =>
+    const activities = courseContents.flatMap((section: any) =>
       section.modules.filter((module: any) => module.modname !== "label" && module.modname !== "resource")
     );
     const totalActivities = activities.length;
@@ -58,7 +58,7 @@ export const getCompletionReport = {
     };
 
     // Traiter chaque utilisateur
-    for (const user of enrolledUsers.users) {
+    for (const user of enrolledUsers) {
       const completionStatus = await client.callFunction<{ statuses: any[] }>("core_completion_get_activities_completion_status", {
         courseid: params.courseid,
         userid: user.id,
@@ -80,8 +80,8 @@ export const getCompletionReport = {
     }
 
     // Calculer le taux de complétion global
-    if (enrolledUsers.users.length > 0) {
-      report.completionRate = Math.round((report.completedActivities / (totalActivities * enrolledUsers.users.length)) * 100);
+    if (enrolledUsers.length > 0) {
+      report.completionRate = Math.round((report.completedActivities / (totalActivities * enrolledUsers.length)) * 100);
     }
 
     return report;
