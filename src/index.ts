@@ -1,17 +1,17 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import dotenv from "dotenv";
 import winston from "winston";
-import { MoodleClient } from "./moodleClient.ts";
+import { MoodleClient } from "./moodleClient.js";
 
-// Imports des outils (extensions .ts)
-import * as coursesTools from "./tools/courses.ts";
-import * as usersTools from "./tools/users.ts";
-import * as enrolmentTools from "./tools/enrolments.ts";
-import * as gradesTools from "./tools/grades.ts";
-import * as scormTools from "./tools/scorm.ts";
-import * as reportTools from "./tools/reports.ts";
+// Imports des outils
+import * as coursesTools from "./tools/courses.js";
+import * as usersTools from "./tools/users.js";
+import * as enrolmentTools from "./tools/enrolments.js";
+import * as gradesTools from "./tools/grades.js";
+import * as scormTools from "./tools/scorm.js";
+import * as reportTools from "./tools/reports.js";
 
 // Charge les variables d'environnement
 dotenv.config();
@@ -70,47 +70,39 @@ const server = new Server(
   }
 );
 
-// Définis le gestionnaire de requêtes
-server.setRequestHandler(
-  {} as any, // Schéma vide (on gère la validation manuellement)
-  async (request: ServerRequest) => {
-    // Log la requête
-    logger.info(`Requête MCP reçue : ${(request as any).method}`, {
-      tool: (request as any).params?.name,
-      timestamp: new Date().toISOString(),
-    });
+// Liste des outils disponibles
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  logger.info("Requête MCP reçue : tools/list");
+  return {
+    tools: tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    })),
+  };
+});
 
-    // Liste des outils disponibles
-    if (ListToolsRequestSchema.parse(request)) {
-      return {
-        tools: tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-        })),
-      };
-    }
+// Appel d'un outil
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const toolName = request.params.name;
+  logger.info(`Requête MCP reçue : tools/call`, {
+    tool: toolName,
+    timestamp: new Date().toISOString(),
+  });
 
-    // Appel d'un outil
-    if (CallToolRequestSchema.parse(request)) {
-      const tool = tools.find((t) => t.name === (request as any).params.name);
-      if (!tool) {
-        throw new Error(`Outil "${(request as any).params.name}" introuvable.`);
-      }
-      try {
-        const result = await tool.handler((request as any).params.arguments, moodleClient);
-        logger.info(`Outil "${tool.name}" exécuté avec succès.`);
-        return result;
-      } catch (error) {
-        logger.error(`Erreur dans l'outil "${tool.name}" : ${String(error)}`);
-        throw error;
-      }
-    }
-
-    // Requête non reconnue
-    throw new Error(`Type de requête inconnu : ${(request as any).method}`);
+  const tool = tools.find((t) => t.name === toolName);
+  if (!tool) {
+    throw new Error(`Outil "${toolName}" introuvable.`);
   }
-);
+  try {
+    const result = await tool.handler(request.params.arguments as any, moodleClient);
+    logger.info(`Outil "${tool.name}" exécuté avec succès.`);
+    return result;
+  } catch (error) {
+    logger.error(`Erreur dans l'outil "${tool.name}" : ${String(error)}`);
+    throw error;
+  }
+});
 
 // Démarre le serveur
 logger.info("🚀 Démarrage du serveur MCP pour Moodle...");
