@@ -7,18 +7,22 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "start:http": "node dist/httpServer.js",
+    "dev:http": "tsx src/httpServer.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "axios": "^1.6.2",
     "dotenv": "^16.3.1",
+    "express": "^5.2.1",
     "node-cache": "^5.1.2",
     "winston": "^3.11.0",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^20.10.5",
     "tsx": "^4.23.1",
     "typescript": "^5.3.3"
