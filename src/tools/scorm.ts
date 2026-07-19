@@ -63,10 +63,10 @@ export const getScormCompletionReport = {
     // Récupérer les utilisateurs
     let users: any[] = [];
     if (params.courseid) {
-      const enrolledUsers = await client.callFunction<{ users: any[] }>("core_enrol_get_enrolled_users", {
+      const enrolledUsers = await client.callFunction<any[]>("core_enrol_get_enrolled_users", {
         courseid: params.courseid,
       });
-      users = enrolledUsers.users;
+      users = enrolledUsers;
     } else {
       const allUsers = await client.callFunction<{ users: any[] }>("core_user_get_users", {});
       users = allUsers.users;

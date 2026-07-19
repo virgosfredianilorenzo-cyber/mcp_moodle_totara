@@ -15,8 +15,8 @@ export const getCourses = {
     courses: z.array(CourseSchema),
   }),
   handler: async (params: { options?: { ids?: number[]; categoryid?: number } }, client: MoodleClient) => {
-    const response = await client.callFunction<{ courses: any[] }>("core_course_get_courses", params);
-    const courses = response.courses.map((course: any) => ({
+    const response = await client.callFunction<any[]>("core_course_get_courses", params);
+    const courses = response.map((course: any) => ({
       id: course.id,
       shortname: course.shortname,
       fullname: course.fullname,
