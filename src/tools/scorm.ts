@@ -1,6 +1,39 @@
 import { z } from "zod";
 import { MoodleClient } from "../moodleClient.js";
 
+interface ScormTrack {
+  element: string;
+  value: string;
+}
+
+function findTrackValue(tracks: ScormTrack[], element: string): string | undefined {
+  return tracks.find((track) => track.element === element)?.value;
+}
+
+// cmi.core.total_time (SCORM 1.2) is "HH:MM:SS[.ss]"; cmi.total_time (SCORM 2004) is an ISO 8601 duration.
+// Moodle normalizes both onto the "total_time" track element without normalizing the format itself.
+function parseScormTimeToSeconds(value?: string): number {
+  if (!value) return 0;
+
+  const isoMatch = value.match(/^P(?:\d+Y)?(?:\d+M)?(?:\d+D)?T(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?$/);
+  if (isoMatch) {
+    const hours = parseInt(isoMatch[1] || "0", 10);
+    const minutes = parseInt(isoMatch[2] || "0", 10);
+    const seconds = parseFloat(isoMatch[3] || "0");
+    return hours * 3600 + minutes * 60 + Math.round(seconds);
+  }
+
+  const hmsMatch = value.match(/^(\d+):(\d{2}):(\d{2}(?:\.\d+)?)$/);
+  if (hmsMatch) {
+    const hours = parseInt(hmsMatch[1], 10);
+    const minutes = parseInt(hmsMatch[2], 10);
+    const seconds = parseFloat(hmsMatch[3]);
+    return hours * 3600 + minutes * 60 + Math.round(seconds);
+  }
+
+  return 0;
+}
+
 export const getScormsByCourses = {
   name: "moodle_get_scorms_by_courses",
   description: "Liste les modules SCORM disponibles dans un ou plusieurs cours.",
@@ -63,10 +96,10 @@ export const getScormCompletionReport = {
     // Récupérer les utilisateurs
     let users: any[] = [];
     if (params.courseid) {
-      const enrolledUsers = await client.callFunction<{ users: any[] }>("core_enrol_get_enrolled_users", {
+      const enrolledUsers = await client.callFunction<any[]>("core_enrol_get_enrolled_users", {
         courseid: params.courseid,
       });
-      users = enrolledUsers.users;
+      users = enrolledUsers;
     } else {
       const allUsers = await client.callFunction<{ users: any[] }>("core_user_get_users", {});
       users = allUsers.users;
@@ -77,6 +110,13 @@ export const getScormCompletionReport = {
       courseids: [params.courseid || 0],
     });
     const scormname = scormInfo.scorms.find((s: any) => s.id === params.scormid)?.name || "SCORM inconnu";
+
+    // Récupérer les SCOs du module SCORM : le dernier SCO "lançable" reflète l'avancement global du module
+    const scoesInfo = await client.callFunction<{ scoes: any[] }>("mod_scorm_get_scorm_scoes", {
+      scormid: params.scormid,
+    });
+    const launchableScoes = scoesInfo.scoes.filter((sco: any) => sco.scormtype === "sco");
+    const mainSco = launchableScoes[launchableScoes.length - 1];
 
     // Initialiser le rapport
     const report: any = {
@@ -90,27 +130,49 @@ export const getScormCompletionReport = {
     };
 
     // Traiter chaque utilisateur
-    for (const user of users) {
-      const attempts = await client.callFunction<{ attempts: any[] }>("mod_scorm_get_scorm_access_information", {
-        scormid: params.scormid,
-        userid: user.id,
-      });
+    if (mainSco) {
+      for (const user of users) {
+        const attemptCount = await client.callFunction<{ attemptscount: number }>("mod_scorm_get_scorm_attempt_count", {
+          scormid: params.scormid,
+          userid: user.id,
+        });
+        if (!attemptCount.attemptscount) {
+          continue;
+        }
 
-      const lastAttempt = attempts.attempts?.[0];
-      if (lastAttempt) {
+        const scoTracks = await client.callFunction<{ data: { attempt: number; tracks: ScormTrack[] } }>(
+          "mod_scorm_get_scorm_sco_tracks",
+          {
+            scoid: mainSco.id,
+            userid: user.id,
+            attempt: 0, // 0 = dernière tentative
+          }
+        );
+
+        const tracks = scoTracks.data?.tracks || [];
+        const status = findTrackValue(tracks, "status");
+        if (!status) {
+          continue;
+        }
+
+        const completed = status === "completed" || status === "passed";
+        const rawScore = findTrackValue(tracks, "score_raw");
+        const score = rawScore !== undefined ? parseFloat(rawScore) : undefined;
+        const timespent = parseScormTimeToSeconds(findTrackValue(tracks, "total_time"));
+
         report.users.push({
           userid: user.id,
           username: user.username,
           firstname: user.firstname,
           lastname: user.lastname,
-          completed: lastAttempt.status === "completed",
-          score: lastAttempt.score,
-          timespent: lastAttempt.timespent,
+          completed,
+          score,
+          timespent,
         });
-        if (lastAttempt.status === "completed") {
+        if (completed) {
           report.completedUsers++;
-          report.averageScore += lastAttempt.score || 0;
-          report.averageTimeSpent += lastAttempt.timespent || 0;
+          report.averageScore += score || 0;
+          report.averageTimeSpent += timespent;
         }
       }
     }
